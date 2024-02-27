@@ -24,11 +24,11 @@ GRANT USE SCHEMA, CREATE FUNCTION, CREATE MATERIALIZED VIEW, CREATE MODEL, CREAT
 GRANT USE SCHEMA, CREATE FUNCTION, CREATE MATERIALIZED VIEW, CREATE MODEL, CREATE TABLE, CREATE VOLUME ON %[1]s TO $automation_principal;
 `, schema)
 	}
-
-	createTable := fmt.Sprintf(`CREATE TABLE %[1]s (version STRING, run_on TIMESTAMP DEFAULT current_timestamp()) USING DELTA;
+	//NOTE: default column values only available on Delta Lake 3.1.0+, falling back to current_timestamp() in insert
+	createTable := fmt.Sprintf(`CREATE TABLE %[1]s (version STRING, run_on TIMESTAMP) USING DELTA TBLPROPERTIES (delta.enableChangeDataFeed = true);
 ALTER TABLE %[1]s SET OWNER TO $owner_principal; --could also be $automation_principal, depending on security posture
 GRANT SELECT, MODIFY ON %[1]s TO $automation_principal;
-INSERT INTO %[1]s VALUES ("00000000000000");
+INSERT INTO %[1]s VALUES ("00000000000000", current_timestamp());
 `, table)
 
 	return strings.Join([]string{createCatalog, createSchema, createTable}, "\n")

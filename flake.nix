@@ -13,6 +13,9 @@
         (final: prev: {
           go = prev.go_1_22;
         })
+        (final: prev: rec {
+          databricks-cli = prev.callPackage ./nix/pkgs/databricks-cli {};
+        })
        ];
 
       # Systems supported
@@ -29,6 +32,7 @@
         default = pkgs.mkShell {
           # The Nix packages provided in the environment
           packages = with pkgs; [
+            databricks-cli
             go
           ];
         };

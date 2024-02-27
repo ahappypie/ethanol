@@ -3,11 +3,16 @@ package ethanol
 import (
 	"github.com/ahappypie/ethanol/internal/ethanol"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
-	Catalog string
-	Schema  string
+	Catalog      string
+	Schema       string
+	ClientId     string
+	ClientSecret string
+	Host         string
+	HttpPath     string
 )
 
 func init() {
@@ -22,6 +27,20 @@ func init() {
 	migrationCmd.PersistentFlags().StringVarP(&Schema, "use-schema", "s", "", "prepends USE SCHEMA <input> to your queries. optional.")
 	//viper.BindPFlag("environment.schema", migrationCmd.PersistentFlags().Lookup("use-schema"))
 	//viper.BindEnv("use-schema", "SCHEMA")
+
+	viper.BindEnv("cluster.clientId", "DATABRICKS_CLIENT_ID")
+	viper.BindEnv("cluster.clientSecret", "DATABRICKS_CLIENT_SECRET")
+	viper.BindEnv("cluster.host", "DATABRICKS_HOST")
+	viper.BindEnv("cluster.httpPath", "DATABRICKS_HTTP_PATH")
+}
+
+func initMigrationConfig() {
+	//unmarshal
+	viper.UnmarshalKey("cluster.clientId", &ClientId)
+	viper.UnmarshalKey("cluster.clientSecret", &ClientSecret)
+	//TODO mark these as required
+	viper.UnmarshalKey("cluster.host", &Host)
+	viper.UnmarshalKey("cluster.httpPath", &HttpPath)
 }
 
 var migrationCmd = &cobra.Command{
@@ -41,8 +60,11 @@ var migrationGenerateCmd = &cobra.Command{
 var migrationRunCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Run all pending migrations",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		initMigrationConfig()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		ethanol.RunMigration(Directory)
+		ethanol.RunMigration(Directory, InternalCatalog, InternalSchema, InternalTable, ClientId, ClientSecret, Host, HttpPath)
 	},
 }
 

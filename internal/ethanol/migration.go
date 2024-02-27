@@ -1,8 +1,12 @@
 package ethanol
 
 import (
+	"cmp"
 	"fmt"
+	"log"
 	"os"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -24,7 +28,7 @@ func writeMigration(directory string, name string, version string, up string, do
 	if _, err := os.Stat("./" + directory); err != nil {
 		if os.IsNotExist(err) {
 			// file does not exists
-			panic(err)
+			log.Fatal(err)
 		} else {
 			// file exists
 			//continue
@@ -40,7 +44,7 @@ func writeMigration(directory string, name string, version string, up string, do
 	dir := "./" + directory + "/" + version + "_" + name
 	if err := os.Mkdir(dir, os.ModePerm); err != nil {
 		//couldn't create the directory for some reason
-		panic(err)
+		log.Fatal(err)
 	}
 	//get frontmatter
 	upsql := frontmatter(version, name, "up", ts) + "\n" + up
@@ -48,14 +52,94 @@ func writeMigration(directory string, name string, version string, up string, do
 	//write up/down sql file content
 	if err := os.WriteFile(dir+"/"+"up.sql", []byte(upsql), os.ModePerm); err != nil {
 		//couldn't write up.sql for some reason
-		panic(err)
+		log.Fatal(err)
 	}
 	if err := os.WriteFile(dir+"/"+"down.sql", []byte(downsql), os.ModePerm); err != nil {
 		//couldn't write down.sql for some reason
-		panic(err)
+		log.Fatal(err)
 	}
 }
 
-func RunMigration(directory string) {
+type Migration struct {
+	Version string
+	Name    string
+	Sql     string
+}
 
+func (m Migration) ParseStatements() []string {
+	//this driver and golang in general do not support multiline sql statements
+	//we're going to break up each statement (and potentially link them with a correlation_id)
+	//ignore comments, i.e. lines starting with --
+	var statements []string
+	for _, stmt := range strings.Split(m.Sql, "\n") {
+		if len(stmt) > 0 && !strings.HasPrefix(stmt, "--") {
+			statements = append(statements, stmt)
+		}
+	}
+	return statements
+}
+
+func RunMigration(directory string, catalog string, schema string, table string, clientId string, clientSecret string, host string, httpPath string) {
+	//build client
+	var client *Client
+	if clientId != "" && clientSecret != "" {
+		client = NewDBSQLClientWithM2M(
+			&ClusterArgs{Host: host, HttpPath: httpPath},
+			&InternalTableArgs{Catalog: catalog, Schema: schema, Table: table},
+			&M2MArgs{ClientId: clientId, ClientSecret: clientSecret},
+		)
+	} else {
+		fmt.Println("clientId and clientSecret not given, attempting U2M auth...")
+		client = NewDBSQLClientWithU2M(
+			&ClusterArgs{Host: host, HttpPath: httpPath},
+			&InternalTableArgs{Catalog: catalog, Schema: schema, Table: table},
+		)
+	}
+	//get latest migration from tracking table
+	lastTrackedVersion, err := client.GetLastMigration()
+	if err != nil {
+		log.Fatal(err)
+	}
+	lastVersion, _ := parseVersion(lastTrackedVersion)
+	//get pending migration set from disk
+	dirs, err := os.ReadDir("./" + directory)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var migrations []Migration
+	for _, dir := range dirs {
+		if dir.IsDir() {
+			version, name := parseVersion(dir.Name())
+			if version > lastVersion {
+				//read up.sql
+				sql, err := os.ReadFile("./" + directory + "/" + dir.Name() + "/up.sql")
+				if err != nil {
+					log.Fatal(err)
+				}
+				//add up.sql to migration set
+				migrations = append(migrations, Migration{Version: version, Name: name, Sql: string(sql)})
+			}
+		}
+	}
+	//run pending migrations in order
+	slices.SortFunc(migrations, func(a, b Migration) int {
+		return cmp.Compare(a.Version, b.Version)
+	})
+	for _, m := range migrations {
+		err := client.ExecuteMigration(m)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	client.Close()
+}
+
+func parseVersion(migration string) (string, string) {
+	s := strings.Split(migration, "_")
+	version := s[0]
+	name := ""
+	if len(s) > 1 {
+		name = s[1]
+	}
+	return version, name
 }
