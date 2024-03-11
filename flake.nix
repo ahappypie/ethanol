@@ -37,5 +37,22 @@
           ];
         };
       });
+
+      packages = forAllSystems ({ pkgs }: {
+        default = pkgs.buildGo122Module rec {
+          pname = "ethanol";
+          version = "0.0.1";
+
+          src = pkgs.lib.cleanSource self;
+
+          vendorHash = "sha256-yWsBQ9qZDH5NkjnQyWqXDnnyF8zZZW1hMOlFC+fYFfc=";
+
+          meta = {
+            description = "A SQL Runner for Databricks Unity Catalog";
+            homepage = "https://github.com/ahappypie/ethanol";
+            maintainers = [ "ahappypie" ];
+          };
+        };
+      });
     };
 }
