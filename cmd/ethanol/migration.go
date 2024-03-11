@@ -72,8 +72,11 @@ var migrationRevertCmd = &cobra.Command{
 	Use:   "revert",
 	Short: "Revert last run migration",
 	Long:  "Revert last run migration as determined by the internal tracking table",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		initMigrationConfig()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-
+		ethanol.RevertMigration(Directory, InternalCatalog, InternalSchema, InternalTable, ClientId, ClientSecret, Host, HttpPath)
 	},
 }
 
@@ -82,6 +85,6 @@ var migrationRedoCmd = &cobra.Command{
 	Short: "Redo last migration",
 	Long:  "Revert and re-run last migration as determined by the internal tracking table",
 	Run: func(cmd *cobra.Command, args []string) {
-
+		println("not yet implemented...")
 	},
 }

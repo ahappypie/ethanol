@@ -60,10 +60,18 @@ func writeMigration(directory string, name string, version string, up string, do
 	}
 }
 
+type MigrationDirection int8
+
+const (
+	UpDirection MigrationDirection = iota
+	DownDirection
+)
+
 type Migration struct {
-	Version string
-	Name    string
-	Sql     string
+	Version   string
+	Name      string
+	Sql       string
+	Direction MigrationDirection
 }
 
 func (m Migration) ParseStatements() []string {
@@ -79,8 +87,7 @@ func (m Migration) ParseStatements() []string {
 	return statements
 }
 
-func RunMigration(directory string, catalog string, schema string, table string, clientId string, clientSecret string, host string, httpPath string) {
-	//build client
+func buildClient(catalog string, schema string, table string, clientId string, clientSecret string, host string, httpPath string) *Client {
 	var client *Client
 	if clientId != "" && clientSecret != "" {
 		client = NewDBSQLClientWithM2M(
@@ -95,13 +102,10 @@ func RunMigration(directory string, catalog string, schema string, table string,
 			&InternalTableArgs{Catalog: catalog, Schema: schema, Table: table},
 		)
 	}
-	//get latest migration from tracking table
-	lastTrackedVersion, err := client.GetLastMigration()
-	if err != nil {
-		log.Fatal(err)
-	}
-	lastVersion, _ := parseVersion(lastTrackedVersion)
-	//get pending migration set from disk
+	return client
+}
+
+func getMigrationSetFromDisk(directory string, lastVersion string, direction MigrationDirection) []Migration {
 	dirs, err := os.ReadDir("./" + directory)
 	if err != nil {
 		log.Fatal(err)
@@ -110,17 +114,38 @@ func RunMigration(directory string, catalog string, schema string, table string,
 	for _, dir := range dirs {
 		if dir.IsDir() {
 			version, name := parseVersion(dir.Name())
-			if version > lastVersion {
+			if direction == UpDirection && version > lastVersion {
 				//read up.sql
 				sql, err := os.ReadFile("./" + directory + "/" + dir.Name() + "/up.sql")
 				if err != nil {
 					log.Fatal(err)
 				}
 				//add up.sql to migration set
-				migrations = append(migrations, Migration{Version: version, Name: name, Sql: string(sql)})
+				migrations = append(migrations, Migration{Version: version, Name: name, Sql: string(sql), Direction: UpDirection})
+			} else if direction == DownDirection && version == lastVersion {
+				sql, err := os.ReadFile("./" + directory + "/" + dir.Name() + "/down.sql")
+				if err != nil {
+					log.Fatal(err)
+				}
+				//add down.sql to migration set
+				migrations = append(migrations, Migration{Version: version, Name: name, Sql: string(sql), Direction: DownDirection})
 			}
 		}
 	}
+	return migrations
+}
+
+func RunMigration(directory string, catalog string, schema string, table string, clientId string, clientSecret string, host string, httpPath string) {
+	//build client
+	client := buildClient(catalog, schema, table, clientId, clientSecret, host, httpPath)
+	//get latest migration from tracking table
+	lastTrackedVersion, err := client.GetLastMigration()
+	if err != nil {
+		log.Fatal(err)
+	}
+	lastVersion, _ := parseVersion(lastTrackedVersion)
+	//get pending migration set from disk
+	migrations := getMigrationSetFromDisk(directory, lastVersion, UpDirection)
 	//run pending migrations in order
 	slices.SortFunc(migrations, func(a, b Migration) int {
 		return cmp.Compare(a.Version, b.Version)
@@ -142,4 +167,24 @@ func parseVersion(migration string) (string, string) {
 		name = s[1]
 	}
 	return version, name
+}
+
+func RevertMigration(directory string, catalog string, schema string, table string, clientId string, clientSecret string, host string, httpPath string) {
+	client := buildClient(catalog, schema, table, clientId, clientSecret, host, httpPath)
+	//get latest migration from tracking table
+	lastTrackedVersion, err := client.GetLastMigration()
+	if err != nil {
+		log.Fatal(err)
+	}
+	//get down.sql from disk
+	migrations := getMigrationSetFromDisk(directory, lastTrackedVersion, DownDirection)
+	if len(migrations) > 0 {
+		err = client.ExecuteMigration(migrations[0])
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		log.Fatalf("no migrations found for version %s", lastTrackedVersion)
+	}
+	client.Close()
 }

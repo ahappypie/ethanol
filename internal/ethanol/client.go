@@ -29,7 +29,13 @@ func (c Client) ExecuteMigration(migration Migration) error {
 	}
 	//TODO sql injection
 	//TODO also check RowsAffected?
-	_, err := c.db.ExecContext(executionCtx, fmt.Sprintf(`INSERT INTO %s VALUES (%s, current_timestamp())`, c.trackingTable(), migration.Version))
+	var trackingSql string
+	if migration.Direction == UpDirection {
+		trackingSql = fmt.Sprintf(`INSERT INTO %s VALUES (%s, current_timestamp())`, c.trackingTable(), migration.Version)
+	} else if migration.Direction == DownDirection {
+		trackingSql = fmt.Sprintf(`DELETE FROM %s WHERE version = "%s"`, c.trackingTable(), migration.Version)
+	}
+	_, err := c.db.ExecContext(executionCtx, trackingSql)
 	if err != nil {
 		return err
 	}
