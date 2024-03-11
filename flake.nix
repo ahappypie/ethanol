@@ -34,6 +34,7 @@
           packages = with pkgs; [
             databricks-cli
             go
+            git-filter-repo
           ];
         };
       });
