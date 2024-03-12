@@ -4,17 +4,19 @@
   # Flake inputs
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    nur-ahappypie = {
+      url = "github:ahappypie/nur-packages";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   # Flake outputs
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, nur-ahappypie }:
     let
       overlays = [
         (final: prev: {
           go = prev.go_1_22;
-        })
-        (final: prev: rec {
-          databricks-cli = prev.callPackage ./nix/pkgs/databricks-cli {};
         })
        ];
 
@@ -32,9 +34,8 @@
         default = pkgs.mkShell {
           # The Nix packages provided in the environment
           packages = with pkgs; [
-            databricks-cli
+            nur-ahappypie.packages.${pkgs.system}.databricks-cli
             go
-            git-filter-repo
           ];
         };
       });

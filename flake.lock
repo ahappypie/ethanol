@@ -16,9 +16,30 @@
         "type": "github"
       }
     },
+    "nur-ahappypie": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1710199898,
+        "narHash": "sha256-diFgjeVe37A/FxBd56D4iAPfSlFZ7HTo9Dap3aqS/jo=",
+        "owner": "ahappypie",
+        "repo": "nur-packages",
+        "rev": "dbba562d1f0cbe8ca9dfa7f860209431deb65a18",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ahappypie",
+        "repo": "nur-packages",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "nur-ahappypie": "nur-ahappypie"
       }
     }
   },
