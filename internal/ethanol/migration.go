@@ -77,10 +77,11 @@ type Migration struct {
 func (m Migration) ParseStatements() []string {
 	//this driver and golang in general do not support multiline sql statements
 	//we're going to break up each statement (and potentially link them with a correlation_id)
-	//ignore comments, i.e. lines starting with --
+	//HOWEVER, this means queries have to be carefully formatted
+	//TODO maybe ignore comments? i.e. lines starting with --
 	var statements []string
-	for _, stmt := range strings.Split(m.Sql, "\n") {
-		if len(stmt) > 0 && !strings.HasPrefix(stmt, "--") {
+	for _, stmt := range strings.Split(m.Sql, ";") {
+		if len(stmt) > 0 /*&& !strings.HasPrefix(stmt, "--")*/ {
 			statements = append(statements, stmt)
 		}
 	}
